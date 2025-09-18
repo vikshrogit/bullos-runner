@@ -108,23 +108,23 @@ RUN set -eux; \
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # Install Go (latest stable)
-RUN set -eux; \
-    # Get latest Go version
-    GO_VER=$(curl -sSL https://go.dev/VERSION?m=text); \
-    GO_VER_CLEAN=${GO_VER#go}; \
-    echo "Installing Go $GO_VER_CLEAN"; \
-    # Detect architecture
-    ARCH=$(dpkg --print-architecture); \
-    case "$ARCH" in \
-        amd64) GO_ARCH="amd64";; \
-        arm64) GO_ARCH="arm64";; \
-        *) echo "Unsupported architecture: $ARCH"; exit 1;; \
-    esac; \
-    # Download Go tarball
-    curl -fsSL "https://dl.google.com/go/${GO_VER_CLEAN}.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz; \
-    tar -C /usr/local -xzf /tmp/go.tar.gz; \
-    rm /tmp/go.tar.gz; \
-    ln -s /usr/local/go/bin/go /usr/local/bin/go
+# RUN set -eux; \
+#     # Get latest Go version
+#     GO_VER=$(curl -sSL https://go.dev/VERSION?m=text); \
+#     GO_VER_CLEAN=${GO_VER#go}; \
+#     echo "Installing Go $GO_VER_CLEAN"; \
+#     # Detect architecture
+#     ARCH=$(dpkg --print-architecture); \
+#     case "$ARCH" in \
+#         amd64) GO_ARCH="amd64";; \
+#         arm64) GO_ARCH="arm64";; \
+#         *) echo "Unsupported architecture: $ARCH"; exit 1;; \
+#     esac; \
+#     # Download Go tarball
+#     curl -fsSL "https://dl.google.com/go/${GO_VER_CLEAN}.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz; \
+#     tar -C /usr/local -xzf /tmp/go.tar.gz; \
+#     rm /tmp/go.tar.gz; \
+#     ln -s /usr/local/go/bin/go /usr/local/bin/go
 
 
 # Install rust (rustup) and set default toolchain
