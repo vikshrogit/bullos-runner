@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  bullos-runner:
+    image: ghcr.io/vikshrogit/bullos-gh-runner:latest
+    container_name: ${RUNNER_NAME}
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - GITHUB_URL=${GITHUB_URL}
+      - RUNNER_TOKEN=${RUNNER_TOKEN}
+      - RUNNER_NAME=${RUNNER_NAME}
+      - RUNNER_LABELS=${RUNNER_LABELS}
+      - RUNNER_WORKDIR=${RUNNER_WORKDIR}
+      - RUNNER_EPHEMERAL=${RUNNER_EPHEMERAL}
+      - RUNNER_RUNNERGROUP=${RUNNER_RUNNERGROUP}
+      - RUNNER_DEBUG=${RUNNER_DEBUG}
+      - RUNNER_CONCURRENCY=${RUNNER_CONCURRENCY}
+    volumes:
+      - bullos_runner_data:/${RUNNER_WORKDIR}
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+
+volumes:
+  bullos_runner_data:
+    driver: local

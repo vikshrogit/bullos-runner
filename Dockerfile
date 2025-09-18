@@ -111,20 +111,21 @@ RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 RUN set -eux; \
     # Get latest Go version
     GO_VER=$(curl -sSL https://go.dev/VERSION?m=text); \
-    echo "Installing Go $GO_VER"; \
-    # Map architecture for Go
+    GO_VER_CLEAN=${GO_VER#go}; \
+    echo "Installing Go $GO_VER_CLEAN"; \
+    # Detect architecture
     ARCH=$(dpkg --print-architecture); \
     case "$ARCH" in \
         amd64) GO_ARCH="amd64";; \
         arm64) GO_ARCH="arm64";; \
         *) echo "Unsupported architecture: $ARCH"; exit 1;; \
     esac; \
-    # Download and extract Go
-    curl -fsSL "https://dl.google.com/go/${GO_VER}.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz; \
+    # Download Go tarball
+    curl -fsSL "https://dl.google.com/go/${GO_VER_CLEAN}.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz; \
     tar -C /usr/local -xzf /tmp/go.tar.gz; \
     rm /tmp/go.tar.gz; \
-    # Add Go to PATH
     ln -s /usr/local/go/bin/go /usr/local/bin/go
+
 
 # Install rust (rustup) and set default toolchain
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
