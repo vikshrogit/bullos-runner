@@ -1,0 +1,54 @@
+# Node/JS artifacts (if any)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.Python
+
+# Docker artifacts
+docker-compose.override.yml
+*.env
+*.log
+*.pid
+/tmp/
+runner-work/
+actions-runner/
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# GitHub Actions
+.github/workflows/*.local.yml
+
+# IDEs
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Archives, binaries, temporary files
+*.zip
+*.tar.gz
+*.tar
+*.tgz
+*.bak
+*.swp
+*.old
+
+# Ignore output of builds (if any)
+dist/
+build/
+out/
+
+.env

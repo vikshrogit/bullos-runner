@@ -1,0 +1,197 @@
+name: Build and Publish bullos-gh-runner image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: bullos-gh-runner
+
+jobs:
+  set-version:
+    runs-on: ubuntu-latest
+    outputs:
+      image_version: ${{ steps.set-version.outputs.version }}
+      bump_type: ${{ steps.set-version.outputs.bump_type }}
+      bump_commits: ${{ steps.set-version.outputs.bump_commits }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch tags
+        run: git fetch --tags
+
+      - name: Determine next semantic version
+        id: set-version
+        run: |
+          LATEST_TAG=$(git tag --sort=-v:refname | head -n1)
+          echo "Latest tag: $LATEST_TAG"
+
+          if [ -z "$LATEST_TAG" ]; then
+            NEXT_TAG="v0.0.1"
+            BUMP_TYPE="initial"
+            BUMP_COMMITS="All commits in repo"
+          else
+            VERSION_NUM=${LATEST_TAG#v}
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION_NUM"
+
+            # Get commits since last tag
+            COMMITS=$(git log ${LATEST_TAG}..HEAD --pretty=format:"%s")
+            echo "Commits since last tag:"
+            echo "$COMMITS"
+
+            # Initialize bump type
+            BUMP_TYPE="patch"
+            BUMP_COMMITS=""
+
+            # Check for breaking changes
+            BREAKING=$(echo "$COMMITS" | grep "BREAKING CHANGE" || true)
+            if [ -n "$BREAKING" ]; then
+              BUMP_TYPE="major"
+              BUMP_COMMITS="$BREAKING"
+            else
+              FEAT=$(echo "$COMMITS" | grep "^feat" || true)
+              if [ -n "$FEAT" ]; then
+                BUMP_TYPE="minor"
+                BUMP_COMMITS="$FEAT"
+              else
+                PATCH_COMMITS=$(echo "$COMMITS" | grep "^fix\|^chore\|^docs" || true)
+                BUMP_COMMITS="$PATCH_COMMITS"
+              fi
+            fi
+
+            # Apply bump
+            case $BUMP_TYPE in
+              major)
+                MAJOR=$((MAJOR+1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR+1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH+1))
+                ;;
+            esac
+
+            NEXT_TAG="v$MAJOR.$MINOR.$PATCH"
+          fi
+
+          echo "Next semantic tag: $NEXT_TAG"
+          echo "Bump type: $BUMP_TYPE"
+          echo "Commits causing bump:"
+          echo "$BUMP_COMMITS"
+
+          # Set outputs
+          echo "version=$NEXT_TAG" >> $GITHUB_OUTPUT
+          echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
+          echo "bump_commits=$BUMP_COMMITS" >> $GITHUB_OUTPUT
+
+  build-and-push:
+    needs: set-version
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Show bump info
+        run: |
+          echo "Image version: ${{ needs.set-version.outputs.image_version }}"
+          echo "Bump type: ${{ needs.set-version.outputs.bump_type }}"
+          echo "Commits causing bump:"
+          echo "${{ needs.set-version.outputs.bump_commits }}"
+
+      - name: Set up QEMU for multi-arch builds
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+      
+      - name: Get latest GitHub Actions runner version
+        id: runner-version
+        run: |
+          # Fetch latest release from GitHub API
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' || echo "v2.328.0")
+          echo "Latest runner version: $LATEST_VERSION"
+          
+          # Remove 'v' prefix if exists
+          LATEST_VERSION_CLEAN=${LATEST_VERSION#v}
+          echo "runner_version=$LATEST_VERSION_CLEAN" >> $GITHUB_OUTPUT
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-arch Docker image
+        id: docker_build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: false
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+            IMAGE_VERSION=${{ needs.set-version.outputs.image_version }}
+            RUNNER_VERSION=${{ steps.runner-version.outputs.runner_version }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repository }}
+          outputs: type=docker
+
+      - name: Scan Docker image with Trivy
+        uses: aquasecurity/trivy-action@v0.33.1
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
+          format: table
+          exit-code: 1
+          severity: CRITICAL,HIGH
+        continue-on-error: false
+
+      - name: Push Docker image after scan passed
+        run: |
+          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
+          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+
+      - name: Get image digests
+        run: |
+          DIGEST_AMD64=$(docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }} --format '{{range .Manifests}}{{if eq .Platform.Architecture "amd64"}}{{.Digest}}{{end}}{{end}}')
+          DIGEST_ARM64=$(docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }} --format '{{range .Manifests}}{{if eq .Platform.Architecture "arm64"}}{{.Digest}}{{end}}{{end}}')
+          echo "DIGEST_AMD64=$DIGEST_AMD64" >> $GITHUB_OUTPUT
+          echo "DIGEST_ARM64=$DIGEST_ARM64" >> $GITHUB_OUTPUT
+
+      - name: Create Git tag and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ needs.set-version.outputs.image_version }}
+          git push origin ${{ needs.set-version.outputs.image_version }}
+
+      - name: Create GitHub Release with image info
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ needs.set-version.outputs.image_version }}
+          name: Release ${{ needs.set-version.outputs.image_version }}
+          body: |
+            **Release Type:** ${{ needs.set-version.outputs.bump_type }}
+
+            **Commits included in this release:**
+            ${{ needs.set-version.outputs.bump_commits }}
+
+            **Docker Images:**
+            - ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
+              - amd64 digest: ${{ steps.docker_build.outputs.DIGEST_AMD64 }}
+              - arm64 digest: ${{ steps.docker_build.outputs.DIGEST_ARM64 }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
