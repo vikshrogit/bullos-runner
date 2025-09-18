@@ -10,13 +10,13 @@ env:
   IMAGE_NAME: bullos-gh-runner
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   set-version:
     runs-on: ubuntu-latest
     permissions:
-      contents: read  # required because this job get tags
+      contents: write  # required because this job get tags
     outputs:
       image_version: ${{ steps.set-version.outputs.version }}
       bump_type: ${{ steps.set-version.outputs.bump_type }}
