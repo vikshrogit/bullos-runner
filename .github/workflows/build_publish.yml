@@ -148,7 +148,7 @@ jobs:
             RUNNER_VERSION=${{ steps.runner-version.outputs.runner_version }}
           labels: |
             org.opencontainers.image.source=${{ github.repository }}
-          outputs: type=docker
+          outputs: type=registry
 
       - name: Scan Docker image with Trivy
         uses: aquasecurity/trivy-action@master
