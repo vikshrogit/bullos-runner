@@ -108,17 +108,23 @@ RUN set -eux; \
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # Install Go (latest stable)
-RUN GO_VER=$(curl -sSL https://go.dev/VERSION?m=text) && \
+RUN set -eux; \
+    # Get latest Go version
+    GO_VER=$(curl -sSL https://go.dev/VERSION?m=text); \
+    echo "Installing Go $GO_VER"; \
+    # Map architecture for Go
     ARCH=$(dpkg --print-architecture); \
     case "$ARCH" in \
-        amd64) GO_ARCH="x86_64";; \
-        arm64) GO_ARCH="aarch64";; \
+        amd64) GO_ARCH="amd64";; \
+        arm64) GO_ARCH="arm64";; \
         *) echo "Unsupported architecture: $ARCH"; exit 1;; \
     esac; \
-    #GO_ARCH=linux-$(dpkg --print-architecture) && \
-    curl -fsSL "https://dl.google.com/go/${GO_VER}.${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz && \
-    tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz
-ENV PATH=/usr/local/go/bin:$PATH
+    # Download and extract Go
+    curl -fsSL "https://dl.google.com/go/${GO_VER}.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz; \
+    tar -C /usr/local -xzf /tmp/go.tar.gz; \
+    rm /tmp/go.tar.gz; \
+    # Add Go to PATH
+    ln -s /usr/local/go/bin/go /usr/local/bin/go
 
 # Install rust (rustup) and set default toolchain
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
