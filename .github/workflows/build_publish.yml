@@ -9,9 +9,14 @@ on:
 env:
   IMAGE_NAME: bullos-gh-runner
 
+permissions:
+  contents: read
+
 jobs:
   set-version:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # required because this job get tags
     outputs:
       image_version: ${{ steps.set-version.outputs.version }}
       bump_type: ${{ steps.set-version.outputs.bump_type }}
@@ -97,6 +102,7 @@ jobs:
     permissions:
       contents: write
       packages: write
+      security-events: write
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
