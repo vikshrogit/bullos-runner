@@ -109,18 +109,16 @@ RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # Install Go (latest stable)
 RUN set -eux; \
-    # Fetch latest Go version
-    GO_VER=$(curl -sSL https://go.dev/VERSION?m=text); \
+    # Get latest Go version, only digits
+    GO_VER=$(curl -sSL https://go.dev/VERSION?m=text | grep -oP '^go\d+\.\d+(\.\d+)?'); \
     GO_VER_CLEAN=${GO_VER#go}; \
     echo "Installing Go $GO_VER_CLEAN"; \
-    # Detect architecture
     ARCH=$(dpkg --print-architecture); \
     case "$ARCH" in \
         amd64) GO_ARCH="amd64";; \
         arm64) GO_ARCH="arm64";; \
         *) echo "Unsupported architecture: $ARCH"; exit 1;; \
     esac; \
-    # Construct download URL safely
     GO_URL="https://go.dev/dl/go${GO_VER_CLEAN}.linux-${GO_ARCH}.tar.gz"; \
     echo "Downloading $GO_URL"; \
     curl -fsSL "$GO_URL" -o /tmp/go.tar.gz; \
@@ -129,6 +127,7 @@ RUN set -eux; \
     rm /tmp/go.tar.gz; \
     ln -s /usr/local/go/bin/go /usr/local/bin/go; \
     go version
+
 
 
 
