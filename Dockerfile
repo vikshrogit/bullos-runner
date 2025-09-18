@@ -71,9 +71,21 @@ RUN curl -fsSL "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release
 RUN curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # Install Terraform (latest stable)
-RUN TF_VER=$(curl -sSL https://releases.hashicorp.com/terraform/ | grep -oP 'terraform/\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1) && \
-    curl -fsSL "https://releases.hashicorp.com/terraform/${TF_VER}/terraform_${TF_VER}_linux_$(dpkg --print-architecture).zip" -o /tmp/terraform.zip && \
-    unzip /tmp/terraform.zip -d /usr/local/bin && rm /tmp/terraform.zip
+RUN set -eux; \
+    # Detect latest Terraform version
+    TF_VER=$(curl -sSL https://releases.hashicorp.com/terraform/ | grep -oP 'terraform/\K[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -1); \
+    echo "Installing Terraform $TF_VER"; \
+    # Map architecture for HashiCorp downloads
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+        amd64) ARCH="x86_64";; \
+        arm64) ARCH="arm64";; \
+        *) echo "Unsupported architecture: $ARCH"; exit 1;; \
+    esac; \
+    # Download and unzip
+    curl -fsSL "https://releases.hashicorp.com/terraform/${TF_VER}/terraform_${TF_VER}_linux_${ARCH}.zip" -o /tmp/terraform.zip; \
+    unzip /tmp/terraform.zip -d /usr/local/bin; \
+    rm /tmp/terraform.zip
 
 # Install AWS CLI v2
 RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-architecture).zip" -o /tmp/awscliv2.zip && \
