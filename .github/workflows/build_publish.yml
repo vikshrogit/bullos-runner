@@ -23,7 +23,7 @@ jobs:
       bump_commits: ${{ steps.set-version.outputs.bump_commits }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Fetch tags
         run: git fetch --tags
@@ -105,7 +105,7 @@ jobs:
       security-events: write
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Show bump info
         run: |
