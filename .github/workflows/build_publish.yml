@@ -135,7 +135,7 @@ jobs:
 
       - name: Build and push multi-arch Docker image
         id: docker_build
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64,linux/arm64
@@ -194,7 +194,7 @@ jobs:
 
             **Docker Images:**
             - ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
-              - amd64 digest: ${{ steps.docker_build.outputs.DIGEST_AMD64 }}
-              - arm64 digest: ${{ steps.docker_build.outputs.DIGEST_ARM64 }}
+              - amd64 digest: ${{ steps.digests.outputs.DIGEST_AMD64 }}
+              - arm64 digest: ${{ steps.digests.outputs.DIGEST_ARM64 }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
