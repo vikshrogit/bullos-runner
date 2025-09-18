@@ -90,17 +90,32 @@ RUN set -eux; \
 
 
 # Install AWS CLI v2
-RUN curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-$(dpkg --print-architecture).zip" -o /tmp/awscliv2.zip && \
-    unzip /tmp/awscliv2.zip -d /tmp && \
-    /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli && \
+RUN set -eux; \
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+        amd64) AWS_ARCH="x86_64";; \
+        arm64) AWS_ARCH="aarch64";; \
+        *) echo "Unsupported architecture: $ARCH"; exit 1;; \
+    esac; \
+    echo "Installing AWS CLI v2 for $AWS_ARCH"; \
+    curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-${AWS_ARCH}.zip" -o /tmp/awscliv2.zip; \
+    unzip /tmp/awscliv2.zip -d /tmp; \
+    /tmp/aws/install --bin-dir /usr/local/bin --install-dir /usr/local/aws-cli; \
     rm -rf /tmp/aws /tmp/awscliv2.zip
+
 
 # Install Azure CLI
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # Install Go (latest stable)
 RUN GO_VER=$(curl -sSL https://go.dev/VERSION?m=text) && \
-    GO_ARCH=linux-$(dpkg --print-architecture) && \
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+        amd64) GO_ARCH="x86_64";; \
+        arm64) GO_ARCH="aarch64";; \
+        *) echo "Unsupported architecture: $ARCH"; exit 1;; \
+    esac; \
+    #GO_ARCH=linux-$(dpkg --print-architecture) && \
     curl -fsSL "https://dl.google.com/go/${GO_VER}.${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz && \
     tar -C /usr/local -xzf /tmp/go.tar.gz && rm /tmp/go.tar.gz
 ENV PATH=/usr/local/go/bin:$PATH
