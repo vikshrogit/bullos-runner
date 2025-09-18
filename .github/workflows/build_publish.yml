@@ -155,6 +155,10 @@ jobs:
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
           format: table
+          timeout: 30m
+          vuln-type: os,library
+          skip-files: '**/__pycache__/**,**/share/doc/**'
+          scanners: vuln  # skip secret scanning for lower memory
           exit-code: 1
           severity: CRITICAL,HIGH
         continue-on-error: false
