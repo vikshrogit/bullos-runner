@@ -108,23 +108,26 @@ RUN set -eux; \
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 # Install Go (latest stable)
-# RUN set -eux; \
-#     # Get latest Go version
-#     GO_VER=$(curl -sSL https://go.dev/VERSION?m=text); \
-#     GO_VER_CLEAN=${GO_VER#go}; \
-#     echo "Installing Go $GO_VER_CLEAN"; \
-#     # Detect architecture
-#     ARCH=$(dpkg --print-architecture); \
-#     case "$ARCH" in \
-#         amd64) GO_ARCH="amd64";; \
-#         arm64) GO_ARCH="arm64";; \
-#         *) echo "Unsupported architecture: $ARCH"; exit 1;; \
-#     esac; \
-#     # Download Go tarball
-#     curl -fsSL "https://dl.google.com/go/${GO_VER_CLEAN}.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz; \
-#     tar -C /usr/local -xzf /tmp/go.tar.gz; \
-#     rm /tmp/go.tar.gz; \
-#     ln -s /usr/local/go/bin/go /usr/local/bin/go
+RUN set -eux; \
+    # Get latest Go version
+    GO_VER=$(curl -sSL https://go.dev/VERSION?m=text); \
+    GO_VER_CLEAN=${GO_VER#go}; \
+    echo "Installing Go $GO_VER_CLEAN"; \
+    # Detect architecture
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+        amd64) GO_ARCH="amd64";; \
+        arm64) GO_ARCH="arm64";; \
+        *) echo "Unsupported architecture: $ARCH"; exit 1;; \
+    esac; \
+    # Download Go tarball
+    # https://go.dev/dl/go1.25.1.linux-amd64.tar.gz
+    curl -fsSL "https://go.dev/dl/go${GO_VER_CLEAN}.linux-${GO_ARCH}.tar.gz" -o /tmp/go.tar.gz; \
+    # Verify download is not empty
+    if [ ! -s /tmp/go.tar.gz ]; then echo "Download failed or empty file"; exit 1; fi; \
+    tar -C /usr/local -xzf /tmp/go.tar.gz; \
+    rm /tmp/go.tar.gz; \
+    ln -s /usr/local/go/bin/go /usr/local/bin/go
 
 
 # Install rust (rustup) and set default toolchain
@@ -134,11 +137,22 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y && \
 ENV PATH=/root/.cargo/bin:${PATH}
 
 # Create non-root user and group
-RUN groupadd --gid 1000 ${RUNNER_USER} && \
-    useradd --uid 1000 --gid ${RUNNER_USER} --create-home --shell /bin/bash ${RUNNER_USER} && \
-    mkdir -p ${RUNNER_HOME}/${RUNNER_WORKDIR} && \
-    chown -R ${RUNNER_USER}:${RUNNER_USER} ${RUNNER_HOME} && \
-    usermod -aG docker ${RUNNER_USER}
+RUN set -eux; \
+    # Create group if not exists
+    if ! getent group $RUNNER_USER >/dev/null; then \
+        groupadd --gid 1000 $RUNNER_USER; \
+    fi; \
+    # Create user if not exists
+    if ! id -u $RUNNER_USER >/dev/null 2>&1; then \
+        useradd --uid 1000 --gid $RUNNER_USER --create-home --shell /bin/bash $RUNNER_USER; \
+    fi; \
+    # Create workdir and set permissions
+    mkdir -p $RUNNER_HOME/$RUNNER_WORKDIR; \
+    chown -R $RUNNER_USER:$RUNNER_USER $RUNNER_HOME; \
+    # Add user to docker group if exists
+    if getent group docker >/dev/null; then \
+        usermod -aG docker $RUNNER_USER; \
+    fi
 
 # Add tini for proper signal handling
 RUN apt-get update && apt-get install -y --no-install-recommends tini && rm -rf /var/lib/apt/lists/*
