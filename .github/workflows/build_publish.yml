@@ -151,7 +151,7 @@ jobs:
           outputs: type=docker
 
       - name: Scan Docker image with Trivy
-        uses: aquasecurity/trivy-action@v0.33.0
+        uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
           format: table
