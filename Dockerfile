@@ -1,6 +1,9 @@
 ARG BASE_IMAGE=ubuntu:latest
 ARG RUNNER_VERSION=2.328.0
 ARG IMAGE_VERSION=latest
+ARG RUNNER_USER=bull
+ARG RUNNER_HOME=/home/bull
+ARG RUNNER_WORKDIR=_work
 
 FROM ${BASE_IMAGE} as base
 
@@ -139,20 +142,20 @@ ENV PATH=/root/.cargo/bin:${PATH}
 
 # Create non-root user and group
 RUN set -eux; \
-    # Create group if not exists
-    if ! getent group $RUNNER_USER >/dev/null; then \
-        groupadd --gid 1000 $RUNNER_USER; \
+    # If the user exists, skip; else create with first available UID/GID >= 1000
+    if ! id -u "$RUNNER_USER" >/dev/null 2>&1; then \
+        # Find available UID and GID starting at 1000
+        UID=$(awk -F: 'BEGIN{uid=1000} {if($3>=uid){uid=$3+1}} END{print uid}' /etc/passwd); \
+        GID=$(awk -F: 'BEGIN{gid=1000} {if($3>=gid){gid=$3+1}} END{print gid}' /etc/group); \
+        groupadd -g "$GID" "$RUNNER_USER"; \
+        useradd --uid "$UID" --gid "$GID" --create-home --shell /bin/bash "$RUNNER_USER"; \
     fi; \
-    # Create user if not exists
-    if ! id -u $RUNNER_USER >/dev/null 2>&1; then \
-        useradd --uid 1000 --gid $RUNNER_USER --create-home --shell /bin/bash $RUNNER_USER; \
-    fi; \
-    # Create workdir and set permissions
-    mkdir -p $RUNNER_HOME/$RUNNER_WORKDIR; \
-    chown -R $RUNNER_USER:$RUNNER_USER $RUNNER_HOME; \
-    # Add user to docker group if exists
+    # Create workdir and set ownership
+    mkdir -p "$RUNNER_HOME/$RUNNER_WORKDIR"; \
+    chown -R "$RUNNER_USER:$RUNNER_USER" "$RUNNER_HOME"; \
+    # Add to docker group if exists
     if getent group docker >/dev/null; then \
-        usermod -aG docker $RUNNER_USER; \
+        usermod -aG docker "$RUNNER_USER"; \
     fi
 
 # Add tini for proper signal handling
