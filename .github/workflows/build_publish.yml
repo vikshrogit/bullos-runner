@@ -203,7 +203,7 @@ jobs:
           git push origin ${{ needs.set-version.outputs.image_version }}
 
       - name: Create GitHub Release with image info
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.set-version.outputs.image_version }}
           name: Release ${{ needs.set-version.outputs.image_version }}
