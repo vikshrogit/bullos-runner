@@ -170,9 +170,10 @@ jobs:
       #     docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
 
       - name: Get image digests
+        id: digests
         run: |
-          DIGEST_AMD64=$(docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }} --format '{{range .Manifests}}{{if eq .Platform.Architecture "amd64"}}{{.Digest}}{{end}}{{end}}')
-          DIGEST_ARM64=$(docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }} --format '{{range .Manifests}}{{if eq .Platform.Architecture "arm64"}}{{.Digest}}{{end}}{{end}}')
+          DIGEST_AMD64=$(docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }} --format '{{range .Manifests}}{{if and (eq .Platform.Architecture "amd64") (eq .Platform.OS "linux")}}{{.Digest}}{{end}}{{end}}')
+          DIGEST_ARM64=$(docker buildx imagetools inspect ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }} --format '{{range .Manifests}}{{if and (eq .Platform.Architecture "arm64") (eq .Platform.OS "linux")}}{{.Digest}}{{end}}{{end}}')
           echo "DIGEST_AMD64=$DIGEST_AMD64" >> $GITHUB_OUTPUT
           echo "DIGEST_ARM64=$DIGEST_ARM64" >> $GITHUB_OUTPUT
 
