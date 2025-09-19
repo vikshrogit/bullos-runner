@@ -37,27 +37,23 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
 # ------------------------------
 # Create runner user and work directory
 # ------------------------------
-RUN & {
-    $runnerUser    = $env:RUNNER_USER;
-    $runnerHome    = $env:RUNNER_HOME;
-    $runnerWorkdir = $env:RUNNER_WORKDIR;
-
-    if (-not (Get-LocalUser -Name $runnerUser -ErrorAction SilentlyContinue)) {
-        $pw = ConvertTo-SecureString 'P@ssw0rd!' -AsPlainText -Force;
-        New-LocalUser -Name $runnerUser -Password $pw -FullName 'GitHub Runner' -Description 'Self-hosted runner user';
-    };
-
-    $runnerPath = Join-Path $runnerHome $runnerWorkdir;
-    if (-not (Test-Path $runnerPath)) {
-        New-Item -ItemType Directory -Path $runnerPath | Out-Null;
-    };
-}
-
-# RUN powershell -Command `
-#     $runnerPath = Join-Path $env:RUNNER_HOME $env:RUNNER_WORKDIR `
-#     if (-not (Test-Path $runnerPath)) { `
-#         New-Item -ItemType Directory -Path $runnerPath | Out-Null `
-#     }
+RUN powershell -Command `
+    $runnerUser = "runner"; `
+    $runnerHome = "C:\$runnerUser"; `
+    $runnerWorkdir = "_work"; `
+    if (-not (Get-LocalUser -Name $runnerUser -ErrorAction SilentlyContinue)) { `
+        $pw = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force; `
+        New-LocalUser -Name $runnerUser -Password $pw -FullName "GitHub Runner" -Description "Self-hosted runner user"; `
+    }; `
+    $runnerPath = Join-Path $runnerHome $runnerWorkdir; `
+    if (-not (Test-Path $runnerPath)) { `
+        New-Item -ItemType Directory -Path $runnerPath | Out-Null `
+    }
+RUN powershell -Command `
+    $runnerPath = "C:\runner\_work"; `
+    if (-not (Test-Path $runnerPath)) { `
+        New-Item -ItemType Directory -Path $runnerPath | Out-Null `
+    }
 
 
 # ------------------------------
