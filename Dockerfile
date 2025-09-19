@@ -1,21 +1,19 @@
 ARG BASE_IMAGE=ubuntu:latest
 ARG RUNNER_VERSION=2.328.0
 ARG IMAGE_VERSION=latest
-ARG RUNNER_USER=runner
-ARG RUNNER_WORKDIR=_work
-ARG TZ=UTC
+
 
 FROM ${BASE_IMAGE} AS base
 
 ARG RUNNER_VERSION
 ARG IMAGE_VERSION
 ENV DEBIAN_FRONTEND=noninteractive \
-    RUNNER_USER=${RUNNER_USER} \
-    RUNNER_HOME=/home/${RUNNER_USER} \
-    RUNNER_WORKDIR=${RUNNER_WORKDIR} \
+    RUNNER_USER=runner \
+    RUNNER_HOME=/home/runner \
+    RUNNER_WORKDIR=_work \
     RUNNER_VERSION=${RUNNER_VERSION} \
     IMAGE_VERSION=${IMAGE_VERSION} \
-    TZ=${TZ}
+    TZ=UTC
 
 # ------------------------------
 # Base system + tools

@@ -1,6 +1,6 @@
 # escape=`
 
-ARG BASE_IMAGE=mcr.microsoft.com/windows/servercore:latest
+ARG BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2025
 ARG RUNNER_VERSION=2.328.0
 ARG IMAGE_VERSION=latest
 ARG RUNNER_USER=runner
