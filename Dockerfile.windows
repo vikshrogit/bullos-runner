@@ -36,11 +36,15 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
     choco install -y git 7zip jq python
 
 # ------------------------------
-# Create runner user
+# Create runner user and work directory
 # ------------------------------
-RUN net user /add ${RUNNER_USER} /y; `
-    mkdir "${RUNNER_HOME}\${RUNNER_WORKDIR}"
-
+RUN if (-not (Get-LocalUser -Name $env:RUNNER_USER -ErrorAction SilentlyContinue)) { `
+        New-LocalUser -Name $env:RUNNER_USER -NoPassword -FullName "GitHub Runner" -Description "Self-hosted runner user"; `
+    }; `
+    $runnerPath = Join-Path $env:RUNNER_HOME $env:RUNNER_WORKDIR; `
+    if (-not (Test-Path $runnerPath)) { `
+        New-Item -ItemType Directory -Path $runnerPath | Out-Null `
+    }
 # ------------------------------
 # Download GitHub Actions Runner
 # ------------------------------
