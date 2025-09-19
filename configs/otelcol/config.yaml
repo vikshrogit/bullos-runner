@@ -1,0 +1,29 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+processors:
+  batch:
+
+exporters:
+  logging:
+    loglevel: info
+  prometheus:
+    endpoint: "0.0.0.0:9464"
+  # Example for Jaeger (uncomment if you have a collector running)
+  # jaeger:
+  #   endpoint: "jaeger-collector:14250"
+  #   insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [logging]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [prometheus]

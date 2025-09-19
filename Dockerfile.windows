@@ -1,0 +1,62 @@
+# escape=`
+
+ARG BASE_IMAGE=mcr.microsoft.com/windows/servercore:latest
+ARG RUNNER_VERSION=2.328.0
+ARG IMAGE_VERSION=latest
+ARG RUNNER_USER=runner
+ARG RUNNER_WORKDIR=_work
+
+FROM ${BASE_IMAGE} AS base
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
+
+ARG RUNNER_VERSION
+ARG IMAGE_VERSION
+ARG RUNNER_USER
+ARG RUNNER_WORKDIR
+
+ENV RUNNER_VERSION=${RUNNER_VERSION} `
+    IMAGE_VERSION=${IMAGE_VERSION} `
+    RUNNER_USER=${RUNNER_USER} `
+    RUNNER_WORKDIR=${RUNNER_WORKDIR} `
+    RUNNER_ALLOW_RUNASROOT=1 `
+    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+
+# ------------------------------
+# Install base dependencies
+# ------------------------------
+RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; `
+    iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+
+# Common tools
+RUN choco install -y git `
+    7zip `
+    wget `
+    unzip `
+    jq `
+    make `
+    visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet" `
+    python --version=3.11.7
+
+# ------------------------------
+# GitHub Actions Runner
+# ------------------------------
+WORKDIR C:\actions-runner
+
+RUN Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v${env:RUNNER_VERSION}/actions-runner-win-x64-${env:RUNNER_VERSION}.zip" -OutFile runner.zip; `
+    Expand-Archive -Path runner.zip -DestinationPath .; `
+    Remove-Item runner.zip
+
+# Add runner user (Windows local user)
+RUN net user ${env:RUNNER_USER} P@ssw0rd! /add /y; `
+    net localgroup Administrators ${env:RUNNER_USER} /add
+
+# ------------------------------
+# Runner entrypoint
+# ------------------------------
+COPY scripts/entrypoint.ps1 C:\entrypoint.ps1
+
+# Preconfigure PowerShell to execute entrypoint
+ENTRYPOINT ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-File", "C:\\entrypoint.ps1"]
+CMD ["run"]

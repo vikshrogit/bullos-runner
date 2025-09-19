@@ -81,17 +81,35 @@ ENV PATH=/root/.cargo/bin:${PATH}
 # Monitoring + Health
 # ------------------------------
 # Prometheus node-exporter
-RUN curl -fsSL https://github.com/prometheus/node_exporter/releases/latest/download/node_exporter-$(uname -s | tr '[:upper:]' '[:lower:]')-$(dpkg --print-architecture).tar.gz -o /tmp/node_exporter.tar.gz || true && \
-    mkdir -p /usr/local/bin/node_exporter && \
-    tar -xzf /tmp/node_exporter.tar.gz --strip-components=1 -C /usr/local/bin/node_exporter || true && \
+# Node Exporter
+RUN set -eux; \
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in amd64) NE_ARCH="amd64";; arm64) NE_ARCH="arm64";; *) exit 1;; esac; \
+    NE_VER=$(curl -s https://api.github.com/repos/prometheus/node_exporter/releases/latest | jq -r .tag_name); \
+    curl -fsSL "https://github.com/prometheus/node_exporter/releases/download/${NE_VER}/node_exporter-${NE_VER#v}.linux-${NE_ARCH}.tar.gz" -o /tmp/node_exporter.tar.gz; \
+    mkdir -p /usr/local/bin/node_exporter; \
+    tar -xzf /tmp/node_exporter.tar.gz --strip-components=1 -C /usr/local/bin/node_exporter; \
     rm -f /tmp/node_exporter.tar.gz
 EXPOSE 9100
 
 # OpenTelemetry Collector (optional tracing)
-RUN curl -fsSL https://github.com/open-telemetry/opentelemetry-collector-releases/releases/latest/download/otelcol_linux_amd64.tar.gz -o /tmp/otelcol.tar.gz && \
-    mkdir -p /usr/local/bin/otelcol && \
-    tar -xzf /tmp/otelcol.tar.gz -C /usr/local/bin/otelcol && \
+# OpenTelemetry Collector (auto latest, multi-arch)
+RUN set -eux; \
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+        amd64) OTEL_ARCH="amd64";; \
+        arm64) OTEL_ARCH="arm64";; \
+        *) echo "Unsupported architecture: $ARCH"; exit 1;; \
+    esac; \
+    OTEL_VER=$(curl -s https://api.github.com/repos/open-telemetry/opentelemetry-collector-releases/releases/latest | jq -r .tag_name); \
+    OTEL_VER_NO_V="${OTEL_VER#v}"; \
+    curl -fsSL "https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/${OTEL_VER}/otelcol-contrib_${OTEL_VER#v}_linux_${OTEL_ARCH}.tar.gz" -o /tmp/otelcol.tar.gz; \
+    mkdir -p /usr/local/bin/otelcol; \
+    tar -xzf /tmp/otelcol.tar.gz -C /usr/local/bin/otelcol; \
     rm -f /tmp/otelcol.tar.gz
+
+# OpenTelemetry config
+COPY configs/otelcol/config.yaml  /etc/otelcol/config.yaml
 EXPOSE 4317 4318
 
 # Healthcheck script
