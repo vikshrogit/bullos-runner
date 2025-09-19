@@ -1,5 +1,4 @@
 # escape=`
-
 ARG BASE_IMAGE=mcr.microsoft.com/windows/servercore:ltsc2022
 ARG RUNNER_VERSION=2.328.0
 ARG IMAGE_VERSION=latest
@@ -8,55 +7,72 @@ ARG RUNNER_WORKDIR=_work
 
 FROM ${BASE_IMAGE} AS base
 
-SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
-
+# ------------------------------
+# Environment
+# ------------------------------
 ARG RUNNER_VERSION
 ARG IMAGE_VERSION
-ARG RUNNER_USER
-ARG RUNNER_WORKDIR
-
-ENV RUNNER_VERSION=${RUNNER_VERSION} `
-    IMAGE_VERSION=${IMAGE_VERSION} `
-    RUNNER_USER=${RUNNER_USER} `
+ENV RUNNER_USER=${RUNNER_USER} `
+    RUNNER_HOME=C:\${RUNNER_USER} `
     RUNNER_WORKDIR=${RUNNER_WORKDIR} `
-    RUNNER_ALLOW_RUNASROOT=1 `
-    DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
+    RUNNER_VERSION=${RUNNER_VERSION} `
+    IMAGE_VERSION=${IMAGE_VERSION}
+
+SHELL ["powershell", "-Command", "$ErrorActionPreference = 'Stop'; $ProgressPreference = 'SilentlyContinue';"]
 
 # ------------------------------
-# Install base dependencies
+# Chocolatey + basic tools
 # ------------------------------
 RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072; `
-    iex ((New-Object System.Net.WebClient).DownloadString('https://chocolatey.org/install.ps1'))
+    iex ((New-Object System.Net.WebClient).DownloadString('https://community.chocolatey.org/install.ps1')); `
+    choco feature enable -n allowGlobalConfirmation; `
+    choco install -y git 7zip jq unzip make python --version=3.11.7
 
-# Common tools
-RUN choco install -y git `
-    7zip `
-    wget `
-    unzip `
-    jq `
-    make `
-    visualstudio2022buildtools --package-parameters "--add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --quiet" `
-    python --version=3.11.7
+# Use curl instead of wget
+RUN curl.exe --version
 
 # ------------------------------
-# GitHub Actions Runner
+# Visual Studio Build Tools
 # ------------------------------
-WORKDIR C:\actions-runner
+RUN Invoke-WebRequest -UseBasicParsing -Uri https://aka.ms/vs/17/release/vs_buildtools.exe -OutFile C:\TEMP\vs_buildtools.exe; `
+    Start-Process C:\TEMP\vs_buildtools.exe -ArgumentList '--quiet --wait --norestart --nocache --installPath C:\BuildTools --add Microsoft.VisualStudio.Workload.VCTools' -Wait; `
+    Remove-Item C:\TEMP\vs_buildtools.exe -Force
 
-RUN Invoke-WebRequest -Uri "https://github.com/actions/runner/releases/download/v${env:RUNNER_VERSION}/actions-runner-win-x64-${env:RUNNER_VERSION}.zip" -OutFile runner.zip; `
-    Expand-Archive -Path runner.zip -DestinationPath .; `
-    Remove-Item runner.zip
-
-# Add runner user (Windows local user)
-RUN net user ${env:RUNNER_USER} P@ssw0rd! /add /y; `
-    net localgroup Administrators ${env:RUNNER_USER} /add
+# Add Build Tools to PATH
+ENV PATH="C:\BuildTools\VC\Tools\MSVC\*\bin\Hostx64\x64;C:\Python311;C:\Python311\Scripts;C:\Program Files\Git\cmd;C:\ProgramData\chocolatey\bin;${PATH}"
 
 # ------------------------------
-# Runner entrypoint
+# Runner directory
+# ------------------------------
+RUN New-Item -ItemType Directory -Path $Env:RUNNER_HOME
+WORKDIR $Env:RUNNER_HOME
+
+# ------------------------------
+# Download GitHub Runner
+# ------------------------------
+RUN $arch = if ([Environment]::Is64BitProcess) { 'x64' } else { 'arm64' }; `
+    $url = "https://github.com/actions/runner/releases/download/v${Env:RUNNER_VERSION}/actions-runner-win-${arch}-${Env:RUNNER_VERSION}.zip"; `
+    Write-Host "Downloading runner $Env:RUNNER_VERSION for $arch"; `
+    Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile C:\runner.zip; `
+    Expand-Archive -Path C:\runner.zip -DestinationPath $Env:RUNNER_HOME; `
+    Remove-Item C:\runner.zip -Force
+
+# ------------------------------
+# Node Exporter (Prometheus metrics)
+# ------------------------------
+# RUN $arch = if ([Environment]::Is64BitProcess) { 'amd64' } else { 'arm64' }; `
+#     $nodever = Invoke-RestMethod https://api.github.com/repos/prometheus/node_exporter/releases/latest | Select-Object -ExpandProperty tag_name; `
+#     $url = "https://github.com/prometheus/node_exporter/releases/download/$nodever/node_exporter-$($env:OS)-$arch.zip"; `
+#     Write-Host "Downloading node_exporter $nodever"; `
+#     Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile C:\node_exporter.zip; `
+#     Expand-Archive -Path C:\node_exporter.zip -DestinationPath C:\node_exporter; `
+#     Remove-Item C:\node_exporter.zip -Force; `
+#     setx PATH ("C:\node_exporter;" + $Env:PATH)
+
+# ------------------------------
+# Entrypoint
 # ------------------------------
 COPY scripts/entrypoint.ps1 C:\entrypoint.ps1
-
-# Preconfigure PowerShell to execute entrypoint
-ENTRYPOINT ["powershell.exe", "-NoLogo", "-ExecutionPolicy", "Bypass", "-File", "C:\\entrypoint.ps1"]
+ENTRYPOINT ["powershell", "-File", "C:\\entrypoint.ps1"]
 CMD ["run"]
