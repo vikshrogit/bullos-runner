@@ -37,13 +37,24 @@ RUN Set-ExecutionPolicy Bypass -Scope Process -Force; `
 # ------------------------------
 # Create runner user and work directory
 # ------------------------------
-RUN if (-not (Get-LocalUser -Name $env:RUNNER_USER -ErrorAction SilentlyContinue)) { `
-        New-LocalUser -Name $env:RUNNER_USER -NoPassword -FullName "GitHub Runner" -Description "Self-hosted runner user"; `
+RUN powershell -Command `
+    $runnerUser = $env:RUNNER_USER; `
+    $runnerHome = $env:RUNNER_HOME; `
+    $runnerWorkdir = $env:RUNNER_WORKDIR; `
+    if (-not (Get-LocalUser -Name $runnerUser -ErrorAction SilentlyContinue)) { `
+        $pw = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force; `
+        New-LocalUser -Name $runnerUser -Password $pw -FullName "GitHub Runner" -Description "Self-hosted runner user"; `
     }; `
+    $runnerPath = Join-Path $runnerHome $runnerWorkdir; `
+    if (-not (Test-Path $runnerPath)) { `
+        New-Item -ItemType Directory -Path $runnerPath | Out-Null `
+    }
+RUN powershell -Command `
     $runnerPath = Join-Path $env:RUNNER_HOME $env:RUNNER_WORKDIR; `
     if (-not (Test-Path $runnerPath)) { `
         New-Item -ItemType Directory -Path $runnerPath | Out-Null `
     }
+
 
 # ------------------------------
 # Download GitHub Actions Runner
