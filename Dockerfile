@@ -119,12 +119,21 @@ HEALTHCHECK --interval=30s --timeout=10s --retries=3 CMD /usr/local/bin/healthch
 # Runner user + entrypoint
 # ------------------------------
 RUN set -eux; \
+    # If the user exists, skip; else create with first available UID/GID >= 1000
     if ! id -u "${RUNNER_USER}" >/dev/null 2>&1; then \
-        groupadd -g 1000 "${RUNNER_USER}"; \
-        useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash "${RUNNER_USER}"; \
+        # Find available UID and GID starting at 1000
+        UID=$(awk -F: 'BEGIN{uid=1000} {if($3>=uid){uid=$3+1}} END{print uid}' /etc/passwd); \
+        GID=$(awk -F: 'BEGIN{gid=1000} {if($3>=gid){gid=$3+1}} END{print gid}' /etc/group); \
+        groupadd -g "$GID" "${RUNNER_USER}"; \
+        useradd --uid "$UID" --gid "$GID" --create-home --shell /bin/bash "${RUNNER_USER}"; \
     fi; \
+    # Create workdir and set ownership
     mkdir -p "${RUNNER_HOME}/${RUNNER_WORKDIR}"; \
-    chown -R "${RUNNER_USER}:${RUNNER_USER}" "${RUNNER_HOME}"
+    chown -R "${RUNNER_USER}:${RUNNER_USER}" "${RUNNER_HOME}"; \
+    # Add to docker group if exists
+    if getent group docker >/dev/null; then \
+        usermod -aG docker "${RUNNER_USER}"; \
+    fi
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
