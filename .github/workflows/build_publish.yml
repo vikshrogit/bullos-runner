@@ -98,48 +98,48 @@ jobs:
           sarif_file: trivy-linux.sarif
         continue-on-error: true
 
-  build-and-push-windows:
-    needs: set-version
-    runs-on: windows-latest # ⚠️ Prefer self-hosted Windows runner
-    permissions:
-      contents: write
-      packages: write
-      security-events: write
-    steps:
-      - name: Checkout repo
-        uses: actions/checkout@v5
-      - name: Login to GHCR
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build and push Windows image
-        run: |
-          docker build -f Dockerfile.windows `
-            -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}-windows `
-            .
-          docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}-windows
-      - name: Install Trivy on Windows
-        shell: pwsh
-        run: |
-          Invoke-WebRequest -Uri https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.56.2_Windows-64bit.zip -OutFile trivy.zip
-          Expand-Archive trivy.zip -DestinationPath $env:USERPROFILE\trivy
-          echo "$env:USERPROFILE\trivy" >> $env:GITHUB_PATH
-      - name: Scan Windows image with Trivy
-        shell: pwsh
-        run: |
-          trivy image --format sarif `
-            --output trivy-windows.sarif `
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}-windows
-      - name: Upload Windows SARIF
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: trivy-windows.sarif
-        continue-on-error: true
+  # build-and-push-windows:
+  #   needs: set-version
+  #   runs-on: windows-latest # ⚠️ Prefer self-hosted Windows runner
+  #   permissions:
+  #     contents: write
+  #     packages: write
+  #     security-events: write
+  #   steps:
+  #     - name: Checkout repo
+  #       uses: actions/checkout@v5
+  #     - name: Login to GHCR
+  #       uses: docker/login-action@v3
+  #       with:
+  #         registry: ghcr.io
+  #         username: ${{ github.actor }}
+  #         password: ${{ secrets.GITHUB_TOKEN }}
+  #     - name: Build and push Windows image
+  #       run: |
+  #         docker build -f Dockerfile.windows `
+  #           -t ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}-windows `
+  #           .
+  #         docker push ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}-windows
+  #     - name: Install Trivy on Windows
+  #       shell: pwsh
+  #       run: |
+  #         Invoke-WebRequest -Uri https://github.com/aquasecurity/trivy/releases/latest/download/trivy_0.56.2_Windows-64bit.zip -OutFile trivy.zip
+  #         Expand-Archive trivy.zip -DestinationPath $env:USERPROFILE\trivy
+  #         echo "$env:USERPROFILE\trivy" >> $env:GITHUB_PATH
+  #     - name: Scan Windows image with Trivy
+  #       shell: pwsh
+  #       run: |
+  #         trivy image --format sarif `
+  #           --output trivy-windows.sarif `
+  #           ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}-windows
+  #     - name: Upload Windows SARIF
+  #       uses: github/codeql-action/upload-sarif@v3
+  #       with:
+  #         sarif_file: trivy-windows.sarif
+  #       continue-on-error: true
 
   release:
-    needs: [set-version, build-and-push-linux, build-and-push-windows]
+    needs: [set-version, build-and-push-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -165,5 +165,5 @@ jobs:
             - Linux multi-arch:
               ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
               ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
-            - Windows:
-              ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}-windows
+#            - Windows:
+#              ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}-windows
