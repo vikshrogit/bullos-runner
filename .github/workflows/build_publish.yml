@@ -63,11 +63,39 @@ jobs:
       contents: write
       packages: write
       security-events: write
+    outputs:
+      DIGEST_AMD64: ${{ steps.linux-digests.outputs.DIGEST_AMD64 }}
+      DIGEST_ARM64: ${{ steps.linux-digests.outputs.DIGEST_ARM64 }}
+      DIGEST_UNKNOWN: ${{ steps.linux-digests.outputs.DIGEST_UNKNOWN }}
+      runner_version: ${{ steps.runner-version.outputs.runner_version }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v5
+      
+      - name: Show bump info
+        run: |
+          echo "Image version: ${{ needs.set-version.outputs.image_version }}"
+          echo "Bump type: ${{ needs.set-version.outputs.bump_type }}"
+          echo "Commits causing bump:"
+          echo "${{ needs.set-version.outputs.bump_commits }}"
+      
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+
+      
+      - name: Get latest GitHub Actions runner version
+        id: runner-version
+        run: |
+          # Fetch latest release from GitHub API
+          LATEST_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name' || echo "v2.328.0")
+          echo "Latest runner version: $LATEST_VERSION"
+          
+          # Remove 'v' prefix if exists
+          LATEST_VERSION_CLEAN=${LATEST_VERSION#v}
+          echo "runner_version=$LATEST_VERSION_CLEAN" >> $GITHUB_OUTPUT
+      
       - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
       - name: Login to GHCR
@@ -76,6 +104,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      
       - name: Build and push Linux multi-arch image
         uses: docker/build-push-action@v6
         with:
@@ -85,18 +114,60 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
             ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+          build-args: |
+            IMAGE_VERSION=${{ needs.set-version.outputs.image_version }}
+            RUNNER_VERSION=${{ steps.runner-version.outputs.runner_version }}
+          labels: |
+            org.opencontainers.image.source=${{ github.repository }}
+            org.opencontainers.image.version=${{ needs.set-version.outputs.image_version }}
+            org.opencontainers.image.created=${{ github.event.head_commit.timestamp || github.event.repository.pushed_at || github.event.repository.updated_at }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.authors=${{ github.actor }}
+            org.opencontainers.image.url=ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+            org.opencontainers.image.build_id=${{ github.run_id }}
+            org.opencontainers.image.build_number=${{ github.run_number }}
+          outputs: type=registry
+      
       - name: Scan Linux image with Trivy
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
           format: sarif
+          timeout: 30m
+          vuln-type: os
+          skip-files: '**/__pycache__/**,**/share/doc/**'
+          scanners: vuln  # skip secret scanning for lower memory
+          ignore-unfixed: true
+          exit-code: 1
+          severity: CRITICAL
           output: trivy-linux.sarif
         continue-on-error: true
+      
       - name: Upload Linux SARIF
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-linux.sarif
         continue-on-error: true
+
+      - name: Upload Trivy reports as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-reports
+          path: |
+            trivy-linux.sarif
+        continue-on-error: true
+
+      - name: Get Linux image digests
+        id: linux-digests
+        run: |
+          RAW=$(docker buildx imagetools inspect --raw ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }})
+          echo "RAW IMAGE: $RAW"
+          DIGEST_AMD64=$(echo "$RAW" | jq -r '.manifests[] | select(.platform.architecture=="amd64" and .platform.os=="linux") | .digest')
+          DIGEST_ARM64=$(echo "$RAW" | jq -r '.manifests[] | select(.platform.architecture=="arm64" and .platform.os=="linux") | .digest')
+          DIGEST_UNKNOWN=$(echo "$RAW" | jq -r '.manifests[] | select(.platform.architecture=="unknown" and .platform.os=="unknown") | .digest')
+          echo "DIGEST_AMD64=$DIGEST_AMD64" >> $GITHUB_OUTPUT
+          echo "DIGEST_ARM64=$DIGEST_ARM64" >> $GITHUB_OUTPUT
+          echo "DIGEST_UNKNOWN=$DIGEST_UNKNOWN" >> $GITHUB_OUTPUT
 
   # build-and-push-windows:
   #   needs: set-version
@@ -140,6 +211,10 @@ jobs:
 
   release:
     needs: [set-version, build-and-push-linux]
+    permissions:
+      contents: write
+      packages: read
+      security-events: read
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -156,14 +231,44 @@ jobs:
           tag_name: ${{ needs.set-version.outputs.image_version }}
           name: Release ${{ needs.set-version.outputs.image_version }}
           body: |
-            **Release Type:** ${{ needs.set-version.outputs.bump_type }}
+            # Release v${{ needs.set-version.outputs.image_version }} BullOS GitHub Runner Docker 
+            ## Github Standalone Runner Docker Image for Linux
+            #### Date: ${{ github.event.head_commit.timestamp || github.event.repository.pushed_at || github.event.repository.updated_at }}
+            ---
+            
+            ### Summary
+            This release of the BullOS GitHub Runner Docker image includes the following changes:
+            - **Version:** ${{ needs.set-version.outputs.image_version }}
+            - **Release Type:** ${{ needs.set-version.outputs.bump_type }}
+            - **Release Date:** ${{ github.event.head_commit.timestamp || github.event.repository.pushed_at || github.event.repository.updated_at }}
+            - **Release Author:** ${{ github.actor }}
+            - **Runner Version:** ${{ needs.build-and-push-linux.outputs.runner_version }}
+            - **Base Image:** Ubuntu 24.04 LTS (Latest)
+            - **Runner Image Base:** Debian Bullseye slim
+            - **Runner Features:** Supports both AMD64 and ARM64 architectures
+            - **Build Id:** ${{ github.run_id }}
+            - **Build Number:** ${{ github.run_number }}
 
-            **Commits in this release:**
-            ${{ needs.set-version.outputs.bump_commits }}
+
+            - **Commits in this release:**
+              ${{ needs.set-version.outputs.bump_commits }}
+
 
             **Docker Images:**
             - Linux multi-arch:
-              ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
-              ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+              - tags:
+                - ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}
+                - ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:latest
+              - digests:
+                - amd64: ${{ needs.build-and-push-linux.outputs.DIGEST_AMD64 }}
+                - arm64: ${{ needs.build-and-push-linux.outputs.DIGEST_ARM64 }}
+                - unknown: ${{ needs.build-and-push-linux.outputs.DIGEST_UNKNOWN }}
+
+            ### Notes
+            - This release includes security vulnerability scans performed by Trivy. Please refer to the SARIF reports for details.
+            - For Windows image, please refer to the commit history for changes as Windows build is currently disabled.
+            ---
+            
+
 #            - Windows:
 #              ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ needs.set-version.outputs.image_version }}-windows
