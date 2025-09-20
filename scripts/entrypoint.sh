@@ -82,9 +82,56 @@ get_runner_token() {
   export RUNNER_TOKEN
 }
 
+
+# --- Helper: remove existing runner from GitHub ---
+remove_runner_from_github() {
+  if [ -z "${GITHUB_PAT:-}" ]; then
+    echo "WARNING: Cannot remove remote runner without GITHUB_PAT"
+    return 0
+  fi
+
+  API_URL="https://api.github.com"
+  URL_PATH=$(echo "$GITHUB_URL" | sed -E 's#https://github.com/##')
+
+  if [[ "$URL_PATH" == */* ]]; then
+    OWNER=$(echo "$URL_PATH" | cut -d/ -f1)
+    REPO=$(echo "$URL_PATH" | cut -d/ -f2)
+    LIST_URL="$API_URL/repos/$OWNER/$REPO/actions/runners"
+  else
+    OWNER="$URL_PATH"
+    if curl -fs -H "Authorization: token ${GITHUB_PAT}" "$API_URL/orgs/$OWNER" >/dev/null 2>&1; then
+      LIST_URL="$API_URL/orgs/$OWNER/actions/runners"
+    else
+      LIST_URL="$API_URL/users/$OWNER/actions/runners"
+    fi
+  fi
+
+  echo "Checking for existing runner with name: ${RUNNER_NAME:-$(hostname)} ..."
+  RUNNER_ID=$(curl -fs -H "Authorization: token ${GITHUB_PAT}" "$LIST_URL" | \
+    jq -r ".runners[] | select(.name==\"${RUNNER_NAME:-$(hostname)}\") | .id")
+
+  if [ -n "$RUNNER_ID" ] && [ "$RUNNER_ID" != "null" ]; then
+    echo "Found existing runner (id=$RUNNER_ID). Removing from GitHub..."
+    curl -fs -X DELETE -H "Authorization: token ${GITHUB_PAT}" "$LIST_URL/$RUNNER_ID" \
+      && echo "Successfully removed runner from GitHub." \
+      || echo "WARNING: Failed to remove runner from GitHub."
+  else
+    echo "No existing runner with that name found on GitHub."
+  fi
+}
+
 # If RUNNER_TOKEN missing or invalid, fetch one
 if [ -z "${RUNNER_TOKEN:-}" ]; then
   get_runner_token
+fi
+
+# Remove existing runner from GitHub if needed
+if [ -n "${GITHUB_PAT:-}" ]; then
+  echo "GITHUB_PAT exists"
+  # call remove_runner_from_github
+  remove_runner_from_github
+else
+  echo "GITHUB_PAT not set, skipping remote removal. If this runner was previously registered, it may remain in GitHub and need to remove manually."
 fi
 
 # Cleanup old config if exists
@@ -101,10 +148,12 @@ register_runner() {
     --name "${RUNNER_NAME:-$(hostname)}" \
     --token "${RUNNER_TOKEN}" \
     --work "${RUNNER_WORKDIR:-_work}" \
-    ${RUNNER_LABELS:+--labels ${RUNNER_LABELS}} \
+    ${RUNNER_LABELS:+--labels $(echo ${RUNNER_LABELS} | tr ',' '\n' | xargs | tr ' ' ',')} \
     ${RUNNER_EPHEMERAL:+--ephemeral} \
     ${RUNNER_RUNNERGROUP:+--runnergroup ${RUNNER_RUNNERGROUP}}
 }
+
+
 
 echo "Configuring runner..."
 if ! register_runner; then

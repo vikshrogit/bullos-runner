@@ -133,7 +133,10 @@ RUN set -eux; \
     # Add to docker group if exists
     if getent group docker >/dev/null; then \
         usermod -aG docker "${RUNNER_USER}"; \
-    fi
+    fi; \
+    # ✅ Allow passwordless sudo
+    echo "${RUNNER_USER} ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/${RUNNER_USER}; \
+    chmod 0440 /etc/sudoers.d/${RUNNER_USER}
 
 COPY scripts/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

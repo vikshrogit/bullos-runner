@@ -52,6 +52,13 @@ jobs:
             NEXT_TAG="v$MAJOR.$MINOR.$PATCH"
             BUMP_COMMITS="$COMMITS"
           fi
+
+          echo "Next semantic tag: $NEXT_TAG"
+          echo "Bump type: $BUMP_TYPE"
+          echo "Commits causing bump:"
+          echo "$BUMP_COMMITS"
+
+          # Set outputs
           echo "version=$NEXT_TAG" >> $GITHUB_OUTPUT
           echo "bump_type=$BUMP_TYPE" >> $GITHUB_OUTPUT
           echo "bump_commits=$BUMP_COMMITS" >> $GITHUB_OUTPUT
