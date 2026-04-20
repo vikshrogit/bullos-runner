@@ -245,7 +245,7 @@ jobs:
           git tag ${{ needs.set-version.outputs.image_version }}
           git push origin ${{ needs.set-version.outputs.image_version }}
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ needs.set-version.outputs.image_version }}
           name: Release ${{ needs.set-version.outputs.image_version }}
